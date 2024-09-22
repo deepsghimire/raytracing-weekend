@@ -5,16 +5,23 @@ use super::ray::Ray;
 use tracing::info;
 
 pub trait Shape {
-    fn intersects_at(&self, ray: &Ray) -> Option<f32>;
+    fn intersects_at(&self, ray: &Ray) -> Option<Hit>;
 }
 
 pub struct Sphere {
     center: Vec3A,
     radius: f32,
+    color: Vec3A,
 }
 
 pub struct Shapes {
     shapes: Vec<Box<dyn Shape>>,
+}
+
+#[derive(Clone, Copy)]
+pub struct Hit {
+    pub at: f32,
+    pub color: Vec3A,
 }
 
 impl Shapes {
@@ -28,22 +35,28 @@ impl Shapes {
 }
 
 impl Shape for Shapes {
-    fn intersects_at(&self, ray: &Ray) -> Option<f32> {
+    fn intersects_at(&self, ray: &Ray) -> Option<Hit> {
         self.shapes.iter().fold(None, |a, b| {
             let t = b.intersects_at(ray);
-            a.map_or(t, |v| t.map_or(Some(v), |x| Some(x.min(v))))
+            a.map_or(t, |v| {
+                t.map_or(Some(v), |x| if x.at < v.at { Some(x) } else { Some(v) })
+            })
         })
     }
 }
 
 impl Sphere {
-    pub fn new(center: Vec3A, radius: f32) -> Self {
-        Self { center, radius }
+    pub fn new(center: Vec3A, radius: f32, color: Vec3A) -> Self {
+        Self {
+            center,
+            radius,
+            color,
+        }
     }
 }
 
 impl Shape for Sphere {
-    fn intersects_at(&self, ray: &Ray) -> Option<f32> {
+    fn intersects_at(&self, ray: &Ray) -> Option<Hit> {
         let a = ray.direction.length_squared();
         let b = 2.0 * (ray.origin - self.center).dot(ray.direction);
         let c = (ray.origin - self.center).length_squared() - self.radius.powi(2);
@@ -74,7 +87,10 @@ impl Shape for Sphere {
                 Some(t1.min(t2))
             };
             info!(result);
-            result
+            Some(Hit {
+                at: result?,
+                color: self.color,
+            })
         }
     }
 }

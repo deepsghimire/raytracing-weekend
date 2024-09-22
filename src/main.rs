@@ -31,8 +31,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     info!(image_width);
     info!(image_height);
     let mut scene = Shapes::new();
-    scene.add(Box::new(Sphere::new(Vec3A::new(-1.0, 0.0, 2.0), 2.0)));
-    scene.add(Box::new(Sphere::new(Vec3A::new(1.0, 0.0, 2.0), 2.0)));
+    scene.add(Box::new(Sphere::new(
+        Vec3A::new(-1.0, 0.0, 4.5),
+        4.0,
+        Vec3A::new(0.5, 0.5, 0.5),
+    )));
+    scene.add(Box::new(Sphere::new(
+        Vec3A::new(1.0, 0.0, 4.0),
+        3.9,
+        Vec3A::new(0.2, 0.2, 0.5),
+    )));
     let camera_pos = Vec3A::new(0.0, 0.0, -0.1);
     let viewport_top_left = Vec3A::new(1.0, 1.0 / ASPECT_RATIO, 0.0);
     let viewport_top_right = Vec3A::new(-1.0, 1.0 / ASPECT_RATIO, 0.0);
@@ -60,8 +68,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             let pixel = Vec3A::lerp(t, b, lerp_factor_row);
             let ray = ray::Ray::new(pixel, (pixel - camera_pos).normalize());
 
-            if scene.intersects_at(&ray).is_some() {
-                img_encoder.put_pixel(255, 255, 255)
+            if let Some(h) = scene.intersects_at(&ray) {
+                let [r, g, b] = h.color.to_array();
+                let r = (r * 255.0) as u8;
+                let g = (g * 255.0) as u8;
+                let b = (b * 255.0) as u8;
+                img_encoder.put_pixel(r, g, b)
             } else {
                 img_encoder.put_pixel(0, 0, 0)
             }
