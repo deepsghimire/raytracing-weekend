@@ -13,7 +13,7 @@ use utils::random_vector;
 
 const ASPECT_RATIO: f32 = 16f32 / 9f32;
 const RECURSION_DEPTH: i32 = 3;
-const SAMPLING: i32 = 120;
+const SAMPLING: i32 = 80;
 mod img;
 mod ray;
 mod scene;
@@ -44,7 +44,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mat1 = Rc::new(Material::new(
         Vec3A::new(0.8, 0.8, 0.8),
         Vec3A::new(0.5, 1.0, 1.0),
-        Vec3A::new(0.0, 0.0, 0.0),
+        Vec3A::new(0.1, 0.0, 0.0),
         1.0,
         Vec3A::new(0.5, 0.5, 0.5),
     ));
