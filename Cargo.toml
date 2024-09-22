@@ -1,0 +1,9 @@
+[package]
+name = "ray"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+glam = "0.29.0"
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"
