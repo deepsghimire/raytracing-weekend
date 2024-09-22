@@ -5,23 +5,26 @@ use super::ray::Ray;
 
 pub struct Material {
     pub ambient_constant: Vec3A,
-    pub diffuse_constant: f32,
-    pub specular_constant: f32,
+    pub diffuse_constant: Vec3A,
+    pub specular_constant: Vec3A,
     pub shininess_factor: f32,
+    pub reflectivity: Vec3A,
 }
 
 impl Material {
     pub fn new(
         ambient_constant: Vec3A,
-        diffuse_constant: f32,
-        specular_constant: f32,
+        diffuse_constant: Vec3A,
+        specular_constant: Vec3A,
         shininess_factor: f32,
+        reflectivity: Vec3A,
     ) -> Self {
         Self {
             ambient_constant,
             diffuse_constant,
             specular_constant,
             shininess_factor,
+            reflectivity,
         }
     }
 }

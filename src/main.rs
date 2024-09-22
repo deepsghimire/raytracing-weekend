@@ -6,14 +6,17 @@ use glam::Vec3A;
 use ray::Ray;
 use scene::Light;
 use std::rc::Rc;
+use tracer::Tracer;
 use tracing::{info, Level};
 use tracing_subscriber;
 
 const ASPECT_RATIO: f32 = 16f32 / 9f32;
+const RECURSION_DEPTH: i32 = 6;
 mod img;
 mod ray;
 mod scene;
 mod shape;
+mod tracer;
 mod utils;
 
 use scene::Scene;
@@ -31,13 +34,25 @@ fn main() -> Result<(), Box<dyn Error>> {
         .finish();
     tracing::subscriber::set_global_default(collector).expect("logging error");
 
-    let image_width = 1200;
+    let image_width = 2400;
     let image_height = (image_width as f32 / ASPECT_RATIO) as i32;
     info!(ASPECT_RATIO);
     info!(image_width);
     info!(image_height);
-    let mat1 = Rc::new(Material::new(Vec3A::new(0.8, 0.8, 0.8), 1.0, 0.01, 1.0));
-    let mat2 = Rc::new(Material::new(Vec3A::new(0.8, 0.8, 0.8), 0.88, 0.15, 1.0));
+    let mat1 = Rc::new(Material::new(
+        Vec3A::new(0.8, 0.8, 0.8),
+        Vec3A::new(0.5, 1.0, 1.0),
+        Vec3A::new(0.0, 0.0, 0.0),
+        1.0,
+        Vec3A::new(0.5, 0.5, 0.5),
+    ));
+    let mat2 = Rc::new(Material::new(
+        Vec3A::new(0.8, 0.8, 0.8),
+        Vec3A::new(0.88, 0.88, 0.88),
+        Vec3A::new(0.0, 0.0, 0.0),
+        1.0,
+        Vec3A::new(0.22, 0.22, 0.22),
+    ));
     let mut scene = Scene::new(Vec3A::new(0.2, 0.2, 0.3));
     scene.shapes.add(Rc::new(Sphere::new(
         Vec3A::new(-1.0, 0.0, 2.0),
@@ -55,6 +70,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         Vec3A::new(-1.0, 2.0, 10.0),
         4.5,
         Vec3A::new(0.2, 0.2, 0.5),
+        mat1.clone(),
+    )));
+
+    scene.shapes.add(Rc::new(Sphere::new(
+        Vec3A::new(0.5, 0.5, 1.5),
+        0.5,
+        Vec3A::new(0.0, 0.5, 0.5),
         mat1.clone(),
     )));
     scene.light_sources.push(Light {
@@ -94,52 +116,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             );
             let pixel = Vec3A::lerp(t, b, lerp_factor_row);
             let ray = ray::Ray::new(pixel, (pixel - camera_pos).normalize());
-
-            if let Some((h, hshape)) = scene.shapes.try_intersect(&ray) {
-                let mut diffuse = Vec3A::ZERO;
-                let mut specular = Vec3A::ZERO;
-                for light in &scene.light_sources {
-                    let shadow_ray = Ray::new(
-                        h.intersection_at,
-                        (light.position - h.intersection_at).normalize(),
-                    );
-                    let mut exclude_light = false;
-                    for shape in &scene.shapes.shapes {
-                        if Rc::ptr_eq(shape, &hshape) {
-                            continue;
-                        };
-                        if shape.hits(&shadow_ray).is_some_and(|t| t > 0.0 && t < 1.0) {
-                            exclude_light = true;
-                        }
-                    }
-
-                    if exclude_light {
-                        continue;
-                    }
-
-                    let light_vec = (light.position - h.intersection_at).normalize();
-                    if h.surface_normal.dot(light_vec) >= 0.0 {
-                        diffuse += h.material.diffuse_constant
-                            * light.diffuse_intensity
-                            * h.surface_normal.dot(light_vec);
-                        let reflectance =
-                            2.0 * h.surface_normal.dot(light_vec) * h.surface_normal - light_vec;
-                        let view = camera_pos - h.intersection_at;
-                        specular += h.material.specular_constant
-                            * light.specular_intensity
-                            * (view.dot(reflectance)).powf(h.material.shininess_factor)
-                    }
-                }
-                let result = h.color
-                    + diffuse
-                    + specular
-                    + scene.ambient_light * h.material.ambient_constant;
-
-                img_encoder.put_pixel_color(as_color(&result.clamp(Vec3A::ZERO, Vec3A::ONE)));
-            } else {
-                // let (r, g, b) = as_color(&scene.ambient_light);
-                img_encoder.put_pixel_color(as_color(&scene.ambient_light))
-            }
+            img_encoder.put_pixel_color(as_color(&Tracer::trace(
+                &ray,
+                camera_pos,
+                &scene,
+                RECURSION_DEPTH,
+            )));
         }
     }
     img_encoder.write_to(io::BufWriter::new(io::stdout()))?;
