@@ -3,10 +3,10 @@
 use std::{error::Error, io};
 
 use glam::Vec3A;
+use ray::Ray;
 use scene::Light;
-use shape::Shape;
 use std::rc::Rc;
-use tracing::{info, instrument, Level};
+use tracing::{info, Level};
 use tracing_subscriber;
 
 const ASPECT_RATIO: f32 = 16f32 / 9f32;
@@ -18,7 +18,6 @@ mod utils;
 
 use scene::Scene;
 use shape::Material;
-use shape::Shapes;
 use shape::Sphere;
 use utils::as_color;
 
@@ -40,19 +39,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mat1 = Rc::new(Material::new(Vec3A::new(0.8, 0.8, 0.8), 1.0, 0.01, 1.0));
     let mat2 = Rc::new(Material::new(Vec3A::new(0.8, 0.8, 0.8), 0.88, 0.15, 1.0));
     let mut scene = Scene::new(Vec3A::new(0.2, 0.2, 0.3));
-    scene.shapes.add(Box::new(Sphere::new(
+    scene.shapes.add(Rc::new(Sphere::new(
         Vec3A::new(-1.0, 0.0, 2.0),
         1.0,
         Vec3A::new(1.0, 0.0, 1.0),
         mat2.clone(),
     )));
-    scene.shapes.add(Box::new(Sphere::new(
+    scene.shapes.add(Rc::new(Sphere::new(
         Vec3A::new(1.0, -1.0, 3.0),
         1.0,
         Vec3A::new(0.2, 0.2, 0.5),
         mat1.clone(),
     )));
-    scene.shapes.add(Box::new(Sphere::new(
+    scene.shapes.add(Rc::new(Sphere::new(
         Vec3A::new(-1.0, 2.0, 10.0),
         4.5,
         Vec3A::new(0.2, 0.2, 0.5),
@@ -96,10 +95,28 @@ fn main() -> Result<(), Box<dyn Error>> {
             let pixel = Vec3A::lerp(t, b, lerp_factor_row);
             let ray = ray::Ray::new(pixel, (pixel - camera_pos).normalize());
 
-            if let Some(h) = scene.shapes.intersects_at(&ray) {
+            if let Some((h, hshape)) = scene.shapes.try_intersect(&ray) {
                 let mut diffuse = Vec3A::ZERO;
                 let mut specular = Vec3A::ZERO;
                 for light in &scene.light_sources {
+                    let shadow_ray = Ray::new(
+                        h.intersection_at,
+                        (light.position - h.intersection_at).normalize(),
+                    );
+                    let mut exclude_light = false;
+                    for shape in &scene.shapes.shapes {
+                        if Rc::ptr_eq(shape, &hshape) {
+                            continue;
+                        };
+                        if shape.hits(&shadow_ray).is_some_and(|t| t > 0.0 && t < 1.0) {
+                            exclude_light = true;
+                        }
+                    }
+
+                    if exclude_light {
+                        continue;
+                    }
+
                     let light_vec = (light.position - h.intersection_at).normalize();
                     if h.surface_normal.dot(light_vec) >= 0.0 {
                         diffuse += h.material.diffuse_constant
@@ -117,8 +134,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                     + diffuse
                     + specular
                     + scene.ambient_light * h.material.ambient_constant;
-
-                // let result = h.color + scene.ambient_light * h.material.ambient_constant;
 
                 img_encoder.put_pixel_color(as_color(&result.clamp(Vec3A::ZERO, Vec3A::ONE)));
             } else {

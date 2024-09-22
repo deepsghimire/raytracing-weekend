@@ -1,11 +1,7 @@
 use glam::Vec3A;
 use std::rc::Rc;
 
-use crate::scene::Light;
-
 use super::ray::Ray;
-
-use tracing::info;
 
 pub struct Material {
     pub ambient_constant: Vec3A,
@@ -31,7 +27,8 @@ impl Material {
 }
 
 pub trait Shape {
-    fn intersects_at(&self, ray: &Ray) -> Option<Hit>;
+    fn hits(&self, ray: &Ray) -> Option<f32>;
+    fn hits_at(&self, ray: &Ray, at: f32) -> Hit;
 }
 
 pub struct Sphere {
@@ -42,7 +39,7 @@ pub struct Sphere {
 }
 
 pub struct Shapes {
-    shapes: Vec<Box<dyn Shape>>,
+    pub shapes: Vec<Rc<dyn Shape>>,
 }
 
 #[derive(Clone)]
@@ -59,22 +56,21 @@ impl Shapes {
         Self { shapes: Vec::new() }
     }
 
-    pub fn add(&mut self, shape: Box<dyn Shape>) {
+    pub fn add(&mut self, shape: Rc<dyn Shape>) {
         self.shapes.push(shape)
     }
-}
 
-impl Shape for Shapes {
-    fn intersects_at(&self, ray: &Ray) -> Option<Hit> {
-        self.shapes.iter().fold(None, |a, b| {
-            let t = b.intersects_at(ray);
-            a.map_or(t.clone(), |v| {
-                t.map_or(
-                    Some(v.clone()),
-                    |x| if x.at < v.at { Some(x) } else { Some(v) },
-                )
-            })
-        })
+    pub fn try_intersect(&self, ray: &Ray) -> Option<(Hit, Rc<dyn Shape>)> {
+        let mut t = Some(f32::INFINITY);
+        let mut closest_hit = None;
+        for shape in &self.shapes {
+            let shape_hit = shape.hits(ray);
+            if shape_hit.is_some() && shape_hit < t {
+                t = shape_hit;
+                closest_hit = Some(shape)
+            }
+        }
+        closest_hit.map(|shape| (shape.hits_at(ray, t.unwrap()), shape.clone()))
     }
 }
 
@@ -90,7 +86,7 @@ impl Sphere {
 }
 
 impl Shape for Sphere {
-    fn intersects_at(&self, ray: &Ray) -> Option<Hit> {
+    fn hits(&self, ray: &Ray) -> Option<f32> {
         let a = ray.direction.length_squared();
         let b = 2.0 * (ray.origin - self.center).dot(ray.direction);
         let c = (ray.origin - self.center).length_squared() - self.radius.powi(2);
@@ -121,19 +117,22 @@ impl Shape for Sphere {
                 Some(t1.min(t2))
             };
             // info!(result);
-            let t = result?;
-            let intersection_at = ray.origin + t * ray.direction;
-            let surface_normal = (intersection_at - self.center).normalize();
-            let material = self.material.clone();
-            let color = self.color;
+            result
+        }
+    }
+    fn hits_at(&self, ray: &Ray, at: f32) -> Hit {
+        let t = at;
+        let intersection_at = ray.origin + t * ray.direction;
+        let surface_normal = (intersection_at - self.center).normalize();
+        let material = self.material.clone();
+        let color = self.color;
 
-            Some(Hit {
-                at: t,
-                intersection_at,
-                surface_normal,
-                material,
-                color,
-            })
+        Hit {
+            at: t,
+            intersection_at,
+            surface_normal,
+            material,
+            color,
         }
     }
 }
