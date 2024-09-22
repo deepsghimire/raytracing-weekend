@@ -22,6 +22,10 @@ impl PPMEncoder {
         self.pixels.push((r, g, b));
     }
 
+    pub fn put_pixel_color(&mut self, color: (u8, u8, u8)) {
+        self.pixels.push(color)
+    }
+
     pub fn write_to<T: io::Write>(&self, mut dest: T) -> Result<(), Box<dyn error::Error>> {
         writeln!(dest, "{}", MAGICNUMBER)?;
         writeln!(dest, "{} {}", self.width, self.height)?;

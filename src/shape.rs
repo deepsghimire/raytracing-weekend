@@ -1,8 +1,34 @@
 use glam::Vec3A;
+use std::rc::Rc;
+
+use crate::scene::Light;
 
 use super::ray::Ray;
 
 use tracing::info;
+
+pub struct Material {
+    pub ambient_constant: Vec3A,
+    pub diffuse_constant: f32,
+    pub specular_constant: f32,
+    pub shininess_factor: f32,
+}
+
+impl Material {
+    pub fn new(
+        ambient_constant: Vec3A,
+        diffuse_constant: f32,
+        specular_constant: f32,
+        shininess_factor: f32,
+    ) -> Self {
+        Self {
+            ambient_constant,
+            diffuse_constant,
+            specular_constant,
+            shininess_factor,
+        }
+    }
+}
 
 pub trait Shape {
     fn intersects_at(&self, ray: &Ray) -> Option<Hit>;
@@ -12,15 +38,19 @@ pub struct Sphere {
     center: Vec3A,
     radius: f32,
     color: Vec3A,
+    material: Rc<Material>,
 }
 
 pub struct Shapes {
     shapes: Vec<Box<dyn Shape>>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct Hit {
     pub at: f32,
+    pub intersection_at: Vec3A,
+    pub surface_normal: Vec3A,
+    pub material: Rc<Material>,
     pub color: Vec3A,
 }
 
@@ -38,19 +68,23 @@ impl Shape for Shapes {
     fn intersects_at(&self, ray: &Ray) -> Option<Hit> {
         self.shapes.iter().fold(None, |a, b| {
             let t = b.intersects_at(ray);
-            a.map_or(t, |v| {
-                t.map_or(Some(v), |x| if x.at < v.at { Some(x) } else { Some(v) })
+            a.map_or(t.clone(), |v| {
+                t.map_or(
+                    Some(v.clone()),
+                    |x| if x.at < v.at { Some(x) } else { Some(v) },
+                )
             })
         })
     }
 }
 
 impl Sphere {
-    pub fn new(center: Vec3A, radius: f32, color: Vec3A) -> Self {
+    pub fn new(center: Vec3A, radius: f32, color: Vec3A, material: Rc<Material>) -> Self {
         Self {
             center,
             radius,
             color,
+            material,
         }
     }
 }
@@ -70,7 +104,7 @@ impl Shape for Sphere {
         } else {
             let t1 = (-b + f32::sqrt(discriminant)) / (2.0 * a);
             let t2 = (-b - f32::sqrt(discriminant)) / (2.0 * a);
-            info!(t1, t2);
+            // info!(t1, t2);
             let result = if t1 < 0.0 {
                 if t2 < 0.0 {
                     None
@@ -86,10 +120,19 @@ impl Shape for Sphere {
             } else {
                 Some(t1.min(t2))
             };
-            info!(result);
+            // info!(result);
+            let t = result?;
+            let intersection_at = ray.origin + t * ray.direction;
+            let surface_normal = (intersection_at - self.center).normalize();
+            let material = self.material.clone();
+            let color = self.color;
+
             Some(Hit {
-                at: result?,
-                color: self.color,
+                at: t,
+                intersection_at,
+                surface_normal,
+                material,
+                color,
             })
         }
     }
